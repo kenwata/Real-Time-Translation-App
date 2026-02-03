@@ -1,0 +1,55 @@
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.coverage
+htmlcov/
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/
+out/
+build/
+dist/
+.pnp
+.pnp.js
+
+# Project Specific - Logs
+logs/
+*.log
+backend/logs/
+
+# Project Specific - Models & Large Files
+sherpa-onnx-*/
+*.onnx
+*.tar.bz2
+*.zip
+**/models/
+backend/sherpa-onnx-*/
+
