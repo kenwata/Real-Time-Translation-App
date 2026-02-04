@@ -49,8 +49,8 @@ class TranscriptionService:
         # Even for online, we might want VAD to reset streams, but standard streaming is continuous.
         vad_config = sherpa_onnx.VadModelConfig()
         vad_config.silero_vad.model = "./silero_vad.onnx"
-        vad_config.silero_vad.threshold = 0.3
-        vad_config.silero_vad.min_silence_duration = 0.5
+        vad_config.silero_vad.threshold = 0.5  # Slightly less sensitive to noise
+        vad_config.silero_vad.min_silence_duration = 1.0 # Increase to 1.0s to avoid cutting sentences too early
         vad_config.silero_vad.min_speech_duration = 0.25
         vad_config.sample_rate = SAMPLE_RATE
         
@@ -165,22 +165,44 @@ class TranscriptionService:
                 logger.error("No stream provided for streaming mode")
                 return []
             
+            # Feed audio to Recognizer
             stream.accept_waveform(SAMPLE_RATE, samples)
-            
             while self.recognizer.is_ready(stream):
                 self.recognizer.decode_stream(stream)
             
-            # Get current result
-            text = self.recognizer.get_result(stream)
+            # Feed audio to VAD for endpoint detection
+            self.vad.accept_waveform(samples)
             
-            if text:
-                # Apply punctuation to the streaming text
-                # Note: This repunctuation might be unstable but provides better UX
-                if self.punctuation:
-                    text = self.punctuation.add_punctuation(text)
-                    text = self.normalize_punctuation(text)
-
-                results.append({"text": text, "is_final": False})
+            # Check if VAD detected a completed segment (Endpoint)
+            is_endpoint = not self.vad.empty()
+            
+            if is_endpoint:
+                # Clear VAD segments (we just use it for trigger)
+                while not self.vad.empty():
+                    self.vad.pop()
+                
+                text = self.recognizer.get_result(stream)
+                if text:
+                    # Finalize
+                    if self.punctuation:
+                        text = self.punctuation.add_punctuation(text)
+                        text = self.normalize_punctuation(text)
+                    
+                    logger.info(f"Stream Endpoint (VAD): {text}")
+                    results.append({"text": text, "is_final": True})
+                    self.recognizer.reset(stream)
+            else:
+                # Partial result
+                text = self.recognizer.get_result(stream)
+                if text:
+                    # Partial punctuation (optional, unstable)
+                    if self.punctuation:
+                        try:
+                            p_text = self.punctuation.add_punctuation(text)
+                            text = self.normalize_punctuation(p_text)
+                        except:
+                            pass
+                    results.append({"text": text, "is_final": False})
                 
             return results
 

@@ -22,8 +22,8 @@ export function ModeSelector({ mode, onChange, disabled }: ModeSelectorProps) {
                 onChange={handleChange}
                 disabled={disabled}
             >
-                <MenuItem value="offline">Offline (Wait for silence)</MenuItem>
-                <MenuItem value="streaming">Streaming (Real-time)</MenuItem>
+                <MenuItem value="offline">Wait for silence</MenuItem>
+                <MenuItem value="streaming">Real-time</MenuItem>
             </Select>
         </FormControl>
     );

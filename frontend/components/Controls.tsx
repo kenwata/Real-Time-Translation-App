@@ -1,9 +1,6 @@
 import React from 'react';
-import { Box, Button, Stack } from "@mui/material";
-import { Mic, Stop, Clear, Logout } from "@mui/icons-material";
-import { LanguageSelector } from "./LanguageSelector";
-import { ModelSelector } from "./ModelSelector";
-import { ModeSelector } from "./ModeSelector";
+import { Box, Stack, Fab, Tooltip } from "@mui/material";
+import { Mic, Stop, Pause, CleaningServices } from "@mui/icons-material";
 
 interface ControlsProps {
   isRecording: boolean;
@@ -11,12 +8,6 @@ interface ControlsProps {
   onStop: () => void;
   onEnd: () => void;
   onClear: () => void;
-  language: string;
-  setLanguage: (lang: string) => void;
-  model: string;
-  setModel: (model: string) => void;
-  mode: string;
-  setMode: (mode: string) => void;
 }
 
 export function Controls({
@@ -25,17 +16,7 @@ export function Controls({
   onStop,
   onEnd,
   onClear,
-  language,
-  setLanguage,
-  model,
-  setModel,
-  mode,
-  setMode
 }: ControlsProps) {
-
-  // Auto-switch mode if model changes to something that doesn't support streaming
-  // Or disable the selector. simple approach: warn or disable.
-  const isStreamingSupported = model === 'zipformer' && language === 'en';
 
   return (
     <Box sx={{
@@ -48,71 +29,43 @@ export function Controls({
       p: 2,
       zIndex: 1000
     }}>
-      <Stack direction="row" spacing={2} justifyContent="center" alignItems="center">
-        <Box sx={{ width: 200 }}>
-          <ModelSelector
-            model={model}
-            onChange={setModel}
-            disabled={isRecording}
-          />
-        </Box>
-        <Box sx={{ width: 200 }}>
-          <LanguageSelector
-            language={language}
-            onChange={setLanguage}
-            disabled={isRecording}
-            model={model}
-          />
-        </Box>
-        <Box sx={{ width: 200 }}>
-          <ModeSelector
-            mode={mode}
-            onChange={setMode}
-            disabled={isRecording || !isStreamingSupported}
-          />
-        </Box>
+      <Stack direction="row" spacing={4} justifyContent="center" alignItems="center">
 
-        {!isRecording ? (
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            startIcon={<Mic />}
-            onClick={onStart}
-            sx={{ minWidth: 150 }}
+        {/* Clear Button (Broom) */}
+        <Tooltip title="Clear Text">
+          <Fab
+            color="inherit"
+            onClick={onClear}
+            size="medium"
+            sx={{ bgcolor: '#f5f5f5' }}
           >
-            Start
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
+            <CleaningServices color="action" />
+          </Fab>
+        </Tooltip>
+
+        {/* Start / Pause Toggle (Mic / Pause) */}
+        <Tooltip title={isRecording ? "Pause" : "Start Transcribing"}>
+          <Fab
+            color={isRecording ? "warning" : "primary"}
+            onClick={isRecording ? onStop : onStart}
+            size="large"
+            sx={{ width: 72, height: 72 }} // Slightly larger for emphasis
+          >
+            {isRecording ? <Pause sx={{ fontSize: 32 }} /> : <Mic sx={{ fontSize: 32 }} />}
+          </Fab>
+        </Tooltip>
+
+        {/* Stop Button (Square/Stop) */}
+        <Tooltip title="End Session">
+          <Fab
             color="error"
-            size="large"
-            startIcon={<Stop />}
-            onClick={onStop}
-            sx={{ minWidth: 150 }}
+            onClick={onEnd}
+            size="medium"
           >
-            Stop
-          </Button>
-        )}
+            <Stop />
+          </Fab>
+        </Tooltip>
 
-        <Button
-          variant="outlined"
-          color="warning"
-          startIcon={<Clear />}
-          onClick={onClear}
-        >
-          Clear
-        </Button>
-
-        <Button
-          variant="outlined"
-          color="secondary"
-          startIcon={<Logout />}
-          onClick={onEnd}
-        >
-          End Session
-        </Button>
       </Stack>
     </Box>
   );

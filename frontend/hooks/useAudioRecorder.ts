@@ -11,8 +11,8 @@ export const useAudioRecorder = () => {
     const streamRef = useRef<MediaStream | null>(null);
     const isConnectedRef = useRef<boolean>(false);
     const [language, setLanguage] = useState<string>('en');
-    const [model, setModel] = useState<string>('sensevoice');
-    const [mode, setMode] = useState<string>('offline');
+    const [model, setModel] = useState<string>('zipformer');
+    const [mode, setMode] = useState<string>('streaming');
     const [partialText, setPartialText] = useState<string>("");
 
     const setModelWithValidation = useCallback((newModel: string) => {
@@ -25,7 +25,7 @@ export const useAudioRecorder = () => {
         }
     }, [language]);
 
-    const stopRecording = useCallback(() => {
+    const pauseRecording = useCallback(() => {
         if (processorRef.current) {
             processorRef.current.disconnect();
             processorRef.current = null;
@@ -61,9 +61,6 @@ export const useAudioRecorder = () => {
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                // Backend now sends {"text": "...", "is_final": boolean}
-                // Fallback for old backend: if no is_final, assume true? No, old backend didn't send is_final.
-
                 if (data.text) {
                     if (data.is_final === false) {
                         setPartialText(data.text);
@@ -91,11 +88,11 @@ export const useAudioRecorder = () => {
         ws.onclose = () => {
             console.log('WebSocket Disconnected');
             isConnectedRef.current = false;
-            stopRecording();
+            pauseRecording();
         };
 
         socketRef.current = ws;
-    }, [language, model, mode, stopRecording]); // Recreate if mode changes
+    }, [language, model, mode, pauseRecording]);
 
     const startRecording = useCallback(async () => {
         try {
@@ -106,12 +103,12 @@ export const useAudioRecorder = () => {
             }
 
             setIsRecording(true);
-            setPartialText(""); // Clear previous partials
+            // setPartialText(""); // Don't clear partials on un-pause, only on Clear
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
-            const audioContext = new AudioContext(); // Use default sample rate (usually 44100 or 48000)
+            const audioContext = new AudioContext();
             audioContextRef.current = audioContext;
 
             const source = audioContext.createMediaStreamSource(stream);
@@ -125,7 +122,6 @@ export const useAudioRecorder = () => {
                 if (!isConnectedRef.current || !socketRef.current) return;
 
                 const inputData = e.inputBuffer.getChannelData(0);
-                // Downsample to 16000Hz if needed
                 const targetRate = 16000;
                 const currentRate = audioContext.sampleRate;
 
@@ -166,20 +162,22 @@ export const useAudioRecorder = () => {
                 })
             }).catch(() => { });
         }
-    }, [connectWebSocket]); // Recreate if connectWebSocket changes
-
-
+    }, [connectWebSocket]);
 
     const endSession = useCallback(() => {
-        stopRecording();
-        // Maybe close socket if strictly ending? 
-        // keeping it open for now in case user restarts immediately
-    }, [stopRecording]);
+        pauseRecording();
+        if (socketRef.current) {
+            console.log('Ending session (Closing WebSocket)');
+            socketRef.current.close();
+            socketRef.current = null;
+        }
+    }, [pauseRecording]);
 
     const clearText = useCallback(() => {
         // Close socket to reset backend state (force new stream on next start)
         if (socketRef.current) {
             socketRef.current.close();
+            socketRef.current = null;
         }
         setText("");
         setPartialText("");
@@ -187,11 +185,11 @@ export const useAudioRecorder = () => {
 
     // Initialize WebSocket
     useEffect(() => {
-        connectWebSocket();
+        // connectWebSocket(); // Don't auto-connect on mount, wait for start
         return () => {
             socketRef.current?.close();
         };
-    }, [connectWebSocket]);
+    }, []); // Remove connectWebSocket from dependency to avoid loop
 
     return {
         isRecording,
@@ -204,7 +202,7 @@ export const useAudioRecorder = () => {
         mode,
         setMode,
         startRecording,
-        stopRecording,
+        pauseRecording,
         endSession,
         clearText
     };

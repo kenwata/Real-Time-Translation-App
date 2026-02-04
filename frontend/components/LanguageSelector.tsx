@@ -25,7 +25,7 @@ export function LanguageSelector({ language, onChange, disabled, model }: Langua
                 onChange={handleChange}
                 disabled={disabled}
             >
-                <MenuItem value="en">English (default)</MenuItem>
+                <MenuItem value="en">English</MenuItem>
 
                 {!isZipformer && <MenuItem value="ja">Japanese</MenuItem>}
                 {!isZipformer && <MenuItem value="ko">Korean</MenuItem>}

@@ -26,8 +26,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 onChange={handleChange}
                 disabled={disabled}
             >
-                <MenuItem value="sensevoice">SenseVoice (Multi)</MenuItem>
-                <MenuItem value="zipformer">Zipformer (En/Zh)</MenuItem>
+                <MenuItem value="sensevoice">SenseVoice</MenuItem>
+                <MenuItem value="zipformer">Zipformer</MenuItem>
             </Select>
         </FormControl>
     );
