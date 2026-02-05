@@ -9,26 +9,24 @@ export const useAudioRecorder = () => {
     const audioContextRef = useRef<AudioContext | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
     const isConnectedRef = useRef<boolean>(false);
     const [language, setLanguage] = useState<string>('en');
-    const [model, setModel] = useState<string>('zipformer');
-    const [mode, setMode] = useState<string>('streaming');
     const [partialText, setPartialText] = useState<string>("");
+    const [isSessionActive, setIsSessionActive] = useState(false);
 
-    const setModelWithValidation = useCallback((newModel: string) => {
-        setModel(newModel);
-        if (newModel === 'zipformer') {
-            const validLanguages = ['en', 'zh'];
-            if (!validLanguages.includes(language)) {
-                setLanguage('en');
-            }
-        }
-    }, [language]);
+    const [segments, setSegments] = useState<string[]>([]);
+
+    const sessionIdRef = useRef<string | null>(null); // Added sessionIdRef
 
     const pauseRecording = useCallback(() => {
         if (processorRef.current) {
             processorRef.current.disconnect();
             processorRef.current = null;
+        }
+        if (sourceRef.current) { // Added sourceRef disconnection
+            sourceRef.current.disconnect();
+            sourceRef.current = null;
         }
         if (audioContextRef.current) {
             audioContextRef.current.close();
@@ -44,12 +42,16 @@ export const useAudioRecorder = () => {
     const connectWebSocket = useCallback(() => {
         if (socketRef.current?.readyState === WebSocket.OPEN) return;
 
-        // Close existing if any (though usually handled by cleanup)
+        // Close existing if any
         if (socketRef.current) {
             socketRef.current.close();
         }
 
-        const wsUrl = `ws://localhost:8000/ws/transcribe?language=${language}&model_type=${model}&mode=${mode}`;
+        const sid = sessionIdRef.current; // Get session ID
+        const sessionIdParam = sid ? `&session_id=${sid}` : ""; // Add session ID parameter
+        // Removed model_type parameter
+        const wsUrl = `ws://localhost:8000/ws/transcribe?language=${language}${sessionIdParam}`;
+
         console.log(`Connecting to WebSocket: ${wsUrl}`);
         const ws = new WebSocket(wsUrl);
 
@@ -66,7 +68,11 @@ export const useAudioRecorder = () => {
                         setPartialText(data.text);
                     } else {
                         // Final result
-                        setText(prev => prev + (prev ? " " : "") + data.text);
+                        const newText = data.text.trim();
+                        if (newText) {
+                            setText(prev => prev + (prev ? " " : "") + newText);
+                            setSegments(prev => [...prev, newText]);
+                        }
                         setPartialText(""); // Clear partial since it's now finalized (or new segment started)
                     }
                 }
@@ -92,10 +98,22 @@ export const useAudioRecorder = () => {
         };
 
         socketRef.current = ws;
-    }, [language, model, mode, pauseRecording]);
+    }, [language, pauseRecording]);
 
     const startRecording = useCallback(async () => {
         try {
+            // Generate session ID if new
+            if (!sessionIdRef.current) {
+                sessionIdRef.current = Date.now().toString();
+                console.log("Started new session:", sessionIdRef.current);
+                // Clear history for new session
+                setText("");
+                setSegments([]);
+                setPartialText("");
+            }
+
+            setIsSessionActive(true);
+
             if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
                 connectWebSocket();
                 // Wait a bit for connection
@@ -108,10 +126,19 @@ export const useAudioRecorder = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
-            const audioContext = new AudioContext();
+            // Attempt to use native 16kHz context for better quality resampling
+            let audioContext: AudioContext;
+            try {
+                audioContext = new AudioContext({ sampleRate: 16000 });
+            } catch (e) {
+                console.warn("Browser does not support sampleRate configuration, falling back to default");
+                audioContext = new AudioContext();
+            }
             audioContextRef.current = audioContext;
+            console.log(`AudioContext Sample Rate: ${audioContext.sampleRate}`);
 
             const source = audioContext.createMediaStreamSource(stream);
+            sourceRef.current = source; // Store source to disconnect later!
 
             // Use ScriptProcessor for raw audio access (simpler for this demo than AudioWorklet)
             // Buffer size 4096 = ~0.25s at 16kHz
@@ -127,7 +154,10 @@ export const useAudioRecorder = () => {
 
                 if (socketRef.current.readyState === WebSocket.OPEN) {
                     if (currentRate === targetRate) {
-                        socketRef.current.send(inputData.buffer);
+                        // usage of .buffer on a TypedArray sends the underlying buffer which might be larger or shared.
+                        // We should send the TypedArray itself (view) or a slice.
+                        // sending the TypedArray view is supported by WebSocket and safer.
+                        socketRef.current.send(inputData);
                     } else {
                         // Simple downsampling
                         const ratio = currentRate / targetRate;
@@ -136,7 +166,7 @@ export const useAudioRecorder = () => {
                         for (let i = 0; i < newLength; i++) {
                             result[i] = inputData[Math.floor(i * ratio)];
                         }
-                        socketRef.current.send(result.buffer);
+                        socketRef.current.send(result);
                     }
                 }
             };
@@ -144,7 +174,6 @@ export const useAudioRecorder = () => {
             source.connect(processor);
             processor.connect(audioContext.destination);
 
-            setIsRecording(true);
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             const errorStack = err instanceof Error ? err.stack : undefined;
@@ -164,24 +193,59 @@ export const useAudioRecorder = () => {
         }
     }, [connectWebSocket]);
 
-    const endSession = useCallback(() => {
+    const endSession = useCallback(async () => { // Made async to await fetch
         pauseRecording();
+
+        // Finalize text: Flush partials and ensure punctuation
+        setText(prev => {
+            const currentPartial = partialText;
+            let combined = prev;
+            if (currentPartial) {
+                combined = (combined + " " + currentPartial).trim();
+            }
+            if (combined && !/[.!?。]$/.test(combined)) {
+                combined += ".";
+            }
+            return combined;
+        });
+
+        // Also finalize segment for partial
+        setSegments(prev => {
+            if (partialText) {
+                return [...prev, partialText];
+            }
+            return prev;
+        });
+
+        setPartialText("");
+
+        const sid = sessionIdRef.current;
+        if (sid) {
+            console.log(`Ending session ${sid} and saving recording...`);
+            try {
+                const response = await fetch('/api/save_recording', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sid })
+                });
+                const result = await response.json();
+                console.log("Recording saved:", result);
+            } catch (e) {
+                console.error("Failed to save recording:", e);
+            }
+            sessionIdRef.current = null; // Reset session ID
+        }
+        setIsSessionActive(false);
+
         if (socketRef.current) {
             console.log('Ending session (Closing WebSocket)');
             socketRef.current.close();
             socketRef.current = null;
         }
-    }, [pauseRecording]);
+    }, [pauseRecording, partialText]);
 
-    const clearText = useCallback(() => {
-        // Close socket to reset backend state (force new stream on next start)
-        if (socketRef.current) {
-            socketRef.current.close();
-            socketRef.current = null;
-        }
-        setText("");
-        setPartialText("");
-    }, []);
+    // clearText removed
+
 
     // Initialize WebSocket
     useEffect(() => {
@@ -193,18 +257,15 @@ export const useAudioRecorder = () => {
 
     return {
         isRecording,
+        isSessionActive,
         text,
+        segments, // New export
         partialText,
         language,
         setLanguage,
-        model,
-        setModel: setModelWithValidation,
-        mode,
-        setMode,
         startRecording,
         pauseRecording,
-        endSession,
-        clearText
+        endSession
     };
 };
 

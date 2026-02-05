@@ -4,18 +4,19 @@ import { Mic, Stop, Pause, CleaningServices } from "@mui/icons-material";
 
 interface ControlsProps {
   isRecording: boolean;
+  isSessionActive: boolean; // Added
   onStart: () => void;
   onStop: () => void;
   onEnd: () => void;
-  onClear: () => void;
+  // onClear removed
 }
 
 export function Controls({
   isRecording,
+  isSessionActive,
   onStart,
   onStop,
   onEnd,
-  onClear,
 }: ControlsProps) {
 
   return (
@@ -31,16 +32,17 @@ export function Controls({
     }}>
       <Stack direction="row" spacing={4} justifyContent="center" alignItems="center">
 
-        {/* Clear Button (Broom) */}
-        <Tooltip title="Clear Text">
-          <Fab
-            color="inherit"
-            onClick={onClear}
-            size="medium"
-            sx={{ bgcolor: '#f5f5f5' }}
-          >
-            <CleaningServices color="action" />
-          </Fab>
+        {/* Clear Button (Broom) - DISABLED */}
+        <Tooltip title="Clear Text (Disabled)">
+          <span>
+            <Fab
+              disabled
+              size="medium"
+              sx={{ bgcolor: '#f5f5f5' }}
+            >
+              <CleaningServices color="action" />
+            </Fab>
+          </span>
         </Tooltip>
 
         {/* Start / Pause Toggle (Mic / Pause) */}
@@ -56,14 +58,17 @@ export function Controls({
         </Tooltip>
 
         {/* Stop Button (Square/Stop) */}
-        <Tooltip title="End Session">
-          <Fab
-            color="error"
-            onClick={onEnd}
-            size="medium"
-          >
-            <Stop />
-          </Fab>
+        <Tooltip title={isSessionActive ? "Stop & Save" : "Start recording to enable stop"}>
+          <span>
+            <Fab
+              color="error"
+              onClick={onEnd}
+              disabled={!isSessionActive}
+              size="medium"
+            >
+              <Stop />
+            </Fab>
+          </span>
         </Tooltip>
 
       </Stack>

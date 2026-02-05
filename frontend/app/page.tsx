@@ -4,56 +4,45 @@ import { Box, Container, CssBaseline, Paper, Typography, Stack } from "@mui/mate
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { Controls } from "@/components/Controls";
 import { useEffect, useRef } from "react";
-import { ModelSelector } from "@/components/ModelSelector";
 import { LanguageSelector } from "@/components/LanguageSelector";
-import { ModeSelector } from "@/components/ModeSelector";
 
 export default function Home() {
   const {
     isRecording,
+    isSessionActive,
     text,
+    segments,
     partialText,
-    model,
-    setModel,
     language,
     setLanguage,
-    mode,
-    setMode,
     startRecording,
     pauseRecording,
-    endSession,
-    clearText
+    endSession
   } = useAudioRecorder();
 
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
 
-  // History segmentation logic
-  // We match sentences ending in punctuation
-  const matches = text.match(/[^.!?。]+[.!?。]+/g) || [];
-  const joinedMatches = matches.join('');
-  const historySegments = matches;
+  // Use segments directly for history
+  const historySegments = segments;
 
-  // Calculate Active Segment (remainder)
-  const activeSegment = text.slice(joinedMatches.length);
-
-  // Combined active text: The tail of finalized text + current streaming partial
-  const displayActiveText = (activeSegment + (partialText || "")).trim();
+  // Combined active text: just the partial text
+  const displayActiveText = (partialText || "").trim();
 
   // Auto-scroll to bottom of history
   useEffect(() => {
     if (scrollAnchorRef.current) {
       scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [text, activeSegment]);
+  }, [segments, partialText]);
 
-  // Logic for mode support
-  const isStreamingSupported = model === 'zipformer' && language === 'en';
+
 
   return (
     <>
       <CssBaseline />
-      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', pb: 15, bgcolor: '#f5f5f5' }}>
-        <Container maxWidth="lg" sx={{ mt: 4, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <CssBaseline />
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#f5f5f5', overflow: 'hidden' }}>
+        <Container maxWidth="lg" sx={{ mt: 4, flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden', pb: 15 }}>
 
           {/* Header Area with Title and Selectors */}
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
@@ -63,26 +52,11 @@ export default function Home() {
 
             {/* Top Right Selectors */}
             <Stack direction="row" spacing={2} alignItems="center">
-              <Box sx={{ width: 180 }}>
-                <ModelSelector
-                  model={model}
-                  onChange={setModel}
-                  disabled={isRecording}
-                />
-              </Box>
               <Box sx={{ width: 150 }}>
                 <LanguageSelector
                   language={language}
                   onChange={setLanguage}
-                  disabled={isRecording}
-                  model={model}
-                />
-              </Box>
-              <Box sx={{ width: 180 }}>
-                <ModeSelector
-                  mode={mode}
-                  onChange={setMode}
-                  disabled={isRecording || !isStreamingSupported}
+                  disabled={true}
                 />
               </Box>
             </Stack>
@@ -135,7 +109,7 @@ export default function Home() {
           <Paper
             elevation={3}
             sx={{
-              height: '240px', // Fixed height (~2x original)
+              height: '180px', // Reduced height (3/4 of original)
               flexShrink: 0,   // Prevent shrinking
               p: 3,
               bgcolor: '#fff',
@@ -148,34 +122,29 @@ export default function Home() {
               {isRecording ? "Live Transcription" : "Active Segment"}
             </Typography>
 
-            {displayActiveText ? (
-              <Typography variant="h6" component="div" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                {displayActiveText}
-                {isRecording && (
-                  <Typography component="span" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                    ...
-                  </Typography>
-                )}
-              </Typography>
-            ) : isRecording ? (
-              <Typography component="div" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                (Listening...)
-              </Typography>
-            ) : (
-              <Typography variant="body1" color="text.secondary">
-                Press Start to begin...
-              </Typography>
-            )}
+            <Typography variant="h6" component="div" sx={{ color: 'text.primary', fontWeight: 500 }}>
+              {/* Show the LAST finalized segment here for context/continuity */}
+              {historySegments.length > 0 && (
+                <span style={{ opacity: 0.6, marginRight: '8px' }}>
+                  {historySegments[historySegments.length - 1]}
+                </span>
+              )}
+              {/* Show current partial */}
+              {displayActiveText}
+              {isRecording && !displayActiveText && historySegments.length === 0 && (
+                <span style={{ fontStyle: 'italic', color: '#999' }}>(Listening...)</span>
+              )}
+            </Typography>
           </Paper>
 
         </Container>
 
         <Controls
           isRecording={isRecording}
+          isSessionActive={isSessionActive}
           onStart={startRecording}
           onStop={pauseRecording}
           onEnd={endSession}
-          onClear={clearText}
         />
       </Box>
     </>

@@ -4,18 +4,15 @@ interface LanguageSelectorProps {
     language: string;
     onChange: (lang: string) => void;
     disabled?: boolean;
-    model?: string;
 }
 
-export function LanguageSelector({ language, onChange, disabled, model }: LanguageSelectorProps) {
+export function LanguageSelector({ language, onChange, disabled }: LanguageSelectorProps) {
     const handleChange = (event: SelectChangeEvent) => {
         onChange(event.target.value as string);
     };
 
-    const isZipformer = model === 'zipformer';
-
     return (
-        <FormControl fullWidth size="small" sx={{ minWidth: 120 }}>
+        <FormControl fullWidth size="small" sx={{ minWidth: 120, mt: 1 }}>
             <InputLabel id="language-select-label">Language</InputLabel>
             <Select
                 labelId="language-select-label"
@@ -26,14 +23,11 @@ export function LanguageSelector({ language, onChange, disabled, model }: Langua
                 disabled={disabled}
             >
                 <MenuItem value="en">English</MenuItem>
-
-                {!isZipformer && <MenuItem value="ja">Japanese</MenuItem>}
-                {!isZipformer && <MenuItem value="ko">Korean</MenuItem>}
-
+                <MenuItem value="ja">Japanese</MenuItem>
+                <MenuItem value="ko">Korean</MenuItem>
                 <MenuItem value="zh">Chinese</MenuItem>
-
-                {!isZipformer && <MenuItem value="yue">Cantonese</MenuItem>}
-                {!isZipformer && <MenuItem value="auto">Auto Detect</MenuItem>}
+                <MenuItem value="yue">Cantonese</MenuItem>
+                <MenuItem value="auto">Auto Detect</MenuItem>
             </Select>
         </FormControl>
     );
